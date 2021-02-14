@@ -44,6 +44,16 @@ namespace BATTLESHIP_CORE_API.Controllers
         {
             return new JsonResult(_service.ShipInstall(model));
         }
+
+        [HttpPost]
+        public ActionResult ShipBotInstall([FromBody] JObject param)
+        {
+            int GAME_ID = param["GAME_ID"].Value<int>();
+            int PLAYER = param["PLAYER"].Value<int>();
+            return new JsonResult(_service.ShipBotInstall(GAME_ID, PLAYER));
+        }
+
+
         #endregion
 
 

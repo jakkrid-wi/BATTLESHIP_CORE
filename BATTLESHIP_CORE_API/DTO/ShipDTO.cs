@@ -7,6 +7,7 @@ namespace BATTLESHIP_CORE_API.DTO
     {
         [Required]
         public int GAME_ID { get; set; }
+        public int PLAYER { get; set; }
         public ShipDTO Ship { get; set; }
     }
 

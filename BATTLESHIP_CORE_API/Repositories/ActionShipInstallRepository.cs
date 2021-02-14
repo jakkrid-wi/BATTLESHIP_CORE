@@ -17,13 +17,15 @@ namespace BATTLESHIP_CORE_API.Repositories
         List<ShipDTO> RandomInstallShip(List<Ship> mShip, Board board);
         void AddShip(ShipDTO Ship, Board board, int player);
 
-        bool CheckShipAlready(int GAME_ID, int player, List<Ship> mShip);
+        bool CheckShipAlready(int GAME_ID, List<Ship> mShip);
 
         bool CheckDupShip(int GAME_ID, int player, ShipDTO Ship, List<Ship> mShip);
 
         List<LocationDTO> GetBoard(int GAME_ID, int player);
 
         string CheckAttack(int GAME_ID, int player, int x, int y);
+
+        bool CheckShipOver(int GAME_ID, int player, List<Ship> mShip);
     }
 
     public class ActionShipInstallRepository : Repository<ActionShipInstall>, IActionShipInstallRepository
@@ -87,6 +89,7 @@ namespace BATTLESHIP_CORE_API.Repositories
                 }
                 else
                 {
+
                     var firstX = ship.FirstOrDefault().Location.FirstOrDefault().X;
                     do
                     {
@@ -94,6 +97,12 @@ namespace BATTLESHIP_CORE_API.Repositories
 
                     } while (pointX == firstX || pointX + 1 == firstX || pointX - 1 == firstX);
 
+                    var firstY = ship.FirstOrDefault().Location.FirstOrDefault().Y;
+                    do
+                    {
+                        pointY = new Random().Next(1, board.SIZE_Y);
+
+                    } while (pointY == firstY || pointY + 1 == firstY || pointY - 1 == firstY);
 
 
                     ship.Add(new ShipDTO
@@ -124,11 +133,14 @@ namespace BATTLESHIP_CORE_API.Repositories
             _db.ActionShipInstall.AddRange(row);
         }
 
-        public bool CheckShipAlready(int GAME_ID, int player, List<Ship> mShip)
+        public bool CheckShipAlready(int GAME_ID, List<Ship> mShip)
         {
-            var ship = _db.ActionShipInstall.Where(c => c.GAME_ID == GAME_ID && c.PLAYER == player).ToList();
+            var allShip = _db.ActionShipInstall.Where(c => c.GAME_ID == GAME_ID).ToList();
+            var ship1 = allShip.Where(c => c.PLAYER == 1).Select(s => s.SHIP_ID).Distinct().ToList();
+            var ship2 = allShip.Where(c => c.PLAYER == 2).Select(s => s.SHIP_ID).Distinct().ToList();
 
-            if (mShip.Count == ship.Count && mShip.Count != 0) return true;
+
+            if (mShip.Count == ship1.Count && mShip.Count == ship2.Count && mShip.Count != 0) return true;
             else return false;
 
         }
@@ -182,7 +194,10 @@ namespace BATTLESHIP_CORE_API.Repositories
             }
         }
 
-
+        public bool CheckShipOver(int GAME_ID, int player, List<Ship> mShip)
+        {
+            return _db.ActionShipInstall.Where(c => c.GAME_ID == GAME_ID && c.PLAYER == player).Select(s => s.SHIP_ID).Distinct().Count() == mShip.Count();
+        }
 
 
     }

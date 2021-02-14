@@ -48,6 +48,7 @@ namespace BATTLESHIP_CORE_API.Services
         public Response ShipInstall(ShipInstall model)
         {
             var board = _unitOfWork.Games.GetGameByID(model.GAME_ID);
+            var mShip = _unitOfWork.Ships.GetAll().ToList();
             if (board == null)
             {
                 return new Response
@@ -56,7 +57,7 @@ namespace BATTLESHIP_CORE_API.Services
                     Message = "ยังไม่สร้าง board"
                 };
             }
-            else if (board.STATUS != GameCodes.Status.INSTALL)
+            else if (board.STATUS != GameCodes.Status.INSTALL || _unitOfWork.ActionShipInstalls.CheckShipOver(board.GAMES_ID, model.PLAYER, mShip))
             {
                 return new Response
                 {
@@ -64,7 +65,7 @@ namespace BATTLESHIP_CORE_API.Services
                     Message = "เกมนี้ไม่สามารถวางเรือได้แล้ว"
                 };
             }
-            var mShip = _unitOfWork.Ships.GetAll().ToList();
+
             var rShip = model.Ship;
             //var rShip = JsonConvert.DeserializeObject<List<ShipDTO>>(jsonShip);
 
@@ -77,7 +78,7 @@ namespace BATTLESHIP_CORE_API.Services
                 };
             }
 
-            if (_unitOfWork.ActionShipInstalls.CheckDistance(rShip, 1, model.GAME_ID, 1))
+            if (_unitOfWork.ActionShipInstalls.CheckDistance(rShip, 1, model.GAME_ID, model.PLAYER))
             {
                 return new Response
                 {
@@ -86,7 +87,7 @@ namespace BATTLESHIP_CORE_API.Services
                 };
             }
 
-            if (_unitOfWork.ActionShipInstalls.CheckDupShip(model.GAME_ID, 1, rShip, mShip))
+            if (_unitOfWork.ActionShipInstalls.CheckDupShip(model.GAME_ID, model.PLAYER, rShip, mShip))
             {
                 return new Response
                 {
@@ -94,46 +95,74 @@ namespace BATTLESHIP_CORE_API.Services
                     Message = "SHIP_ID Duplicate!"
                 };
             }
+            _unitOfWork.ActionShipInstalls.AddShip(rShip, board, model.PLAYER);
+            _unitOfWork.SaveChanges();
 
-            _unitOfWork.ActionShipInstalls.AddShip(rShip, board, 1);
+            AllShipOK(board, model.GAME_ID, mShip);
 
 
-            if (_unitOfWork.ActionShipInstalls.CheckShipAlready(model.GAME_ID, 1, mShip))
+            return new Response
             {
-                //bot ship
-                var ship_bot = _unitOfWork.ActionShipInstalls.RandomInstallShip(mShip, board);
-                foreach (var item in ship_bot)
+                ResponseCode = "0",
+                Data = board
+            };
+        }
+
+
+        public Response ShipBotInstall(int GAME_ID, int PLAYER)
+        {
+            var board = _unitOfWork.Games.GetGameByID(GAME_ID);
+            var mShip = _unitOfWork.Ships.GetAll().ToList();
+            //bot ship
+            var ship_bot = _unitOfWork.ActionShipInstalls.RandomInstallShip(mShip, board);
+            foreach (var item in ship_bot)
+            {
+                if (_unitOfWork.ActionShipInstalls.CheckOverBoard(item, board))
                 {
-                    if (_unitOfWork.ActionShipInstalls.CheckOverBoard(item, board))
+                    return new Response
                     {
-                        new Response
-                        {
-                            ResponseCode = "1",
-                            Message = "วางเรือเกินพื้นที่ 5*5 ช่อง"
-                        };
-                    }
-
-                    if (_unitOfWork.ActionShipInstalls.CheckDistance(item, 1, model.GAME_ID, 2))
-                    {
-                        return new Response
-                        {
-                            ResponseCode = "1",
-                            Message = "วางเรือหางกัน 1 ช่อง"
-                        };
-                    }
-
-                    if (_unitOfWork.ActionShipInstalls.CheckDupShip(model.GAME_ID, 2, item, mShip))
-                    {
-                        return new Response
-                        {
-                            ResponseCode = "1",
-                            Message = "SHIP_ID Duplicate!"
-                        };
-                    }
-
-
-                    _unitOfWork.ActionShipInstalls.AddShip(item, board, 2);
+                        ResponseCode = "1",
+                        Message = "วางเรือเกินพื้นที่ 5*5 ช่อง"
+                    };
                 }
+
+                if (_unitOfWork.ActionShipInstalls.CheckDistance(item, 1, GAME_ID, PLAYER))
+                {
+                    return new Response
+                    {
+                        ResponseCode = "1",
+                        Message = "วางเรือหางกัน 1 ช่อง"
+                    };
+                }
+
+                if (_unitOfWork.ActionShipInstalls.CheckDupShip(GAME_ID, PLAYER, item, mShip))
+                {
+                    return new Response
+                    {
+                        ResponseCode = "1",
+                        Message = "SHIP_ID Duplicate!"
+                    };
+                }
+
+                _unitOfWork.ActionShipInstalls.AddShip(item, board, PLAYER);
+                _unitOfWork.SaveChanges();
+            }
+
+            AllShipOK(board, GAME_ID, mShip);
+
+            return new Response
+            {
+                ResponseCode = "0",
+                Data = board
+            };
+
+        }
+
+        public void AllShipOK(Board board, int GAME_ID, List<Ship> mShip)
+        {
+            if (_unitOfWork.ActionShipInstalls.CheckShipAlready(GAME_ID, mShip))
+            {
+
                 _unitOfWork.Games.SetGameStatus(board, GameCodes.Status.READY);
             }
             else
@@ -142,12 +171,8 @@ namespace BATTLESHIP_CORE_API.Services
             }
 
             _unitOfWork.SaveChanges();
-            return new Response
-            {
-                ResponseCode = "0",
-                Data = board
-            };
         }
+
 
         public GridBoardDTO GetBoard(int GAME_ID, int PLAYER)
         {
@@ -163,6 +188,11 @@ namespace BATTLESHIP_CORE_API.Services
 
         public Response Attack(int GAME_ID, int PLAYER, int x, int y)
         {
+            if (_unitOfWork.ActionMoves.CanATK(GAME_ID, PLAYER))
+            {
+                return new Response { ResponseCode = "1", Message = "รอผู้เล่นฝั่งตรงข้ามโจมตีก่อน" };
+            }
+
             if (_unitOfWork.ActionMoves.CheckATKDup(GAME_ID, PLAYER, x, y))
             {
                 return new Response { ResponseCode = "1", Message = "ไม่สามารถโจมตีที่เดิมได้" };
